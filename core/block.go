@@ -2,15 +2,19 @@ package core
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
+	"encoding/gob"
+	"fmt"
 	"io"
+
+	"github.com/Jawadh-Salih/go-blockchain/crypto"
 
 	"github.com/Jawadh-Salih/go-blockchain/types"
 )
 
 type Header struct {
 	Version   uint32
+	DataHash  types.Hash // hash of all the transactions
 	PrevBlock types.Hash
 	Timestamp int64
 	Height    uint32
@@ -53,49 +57,68 @@ func (h *Header) DecodeBinary(r io.Reader) error {
 
 // if we want hash the block we can't hash everything.
 type Block struct {
-	Header
+	*Header      // we want to keep a references of headers than copies.
 	Transactions []Transaction
+	Validator    crypto.PublicKey
+	Signature    *crypto.Signature
 
 	// Cached version of the block hash
 	hash types.Hash
 }
 
-func (b *Block) Hash() types.Hash {
-	// check if the cache is
-	buf := &bytes.Buffer{}
-	b.Header.EncodeBinary(buf)
+func NewBlock(h *Header, txns []Transaction) *Block {
+	return &Block{
+		Header:       h,
+		Transactions: txns,
+	}
+}
 
+func (b *Block) Decode(r io.Reader, dec Decoder[*Block]) error {
+	return dec.Decode(r, b)
+}
+
+func (b *Block) Encode(w io.Writer, dec Encoder[*Block]) error {
+	return dec.Encode(w, b)
+}
+
+func (b *Block) Hash(hasher Hasher[*Block]) types.Hash {
 	if b.hash.IsZero() {
-		b.hash = types.Hash(sha256.Sum256(buf.Bytes()))
+		b.hash = hasher.Hash(b)
 	}
 
 	return b.hash
 }
 
-func (b *Block) EncodeBinary(w io.Writer) error {
-	if err := b.Header.EncodeBinary(w); err != nil {
+func (b *Block) Sign(privKey crypto.PrivateKey) error {
+	sig, err := privKey.Sign(b.HeaderData())
+	if err != nil {
 		return err
 	}
 
-	for _, tx := range b.Transactions {
-		if err := tx.EncodeBinary(w); err != nil {
-			return err
-		}
+	b.Validator = privKey.PublicKey()
+	b.Signature = sig
+
+	return nil
+}
+
+func (b *Block) Verify() error {
+	if b.Signature == nil {
+		return fmt.Errorf("block has no signature")
+	}
+
+	//
+	if !b.Signature.Verify(b.Validator, b.HeaderData()) {
+		return fmt.Errorf("invalid block signature")
 	}
 
 	return nil
 }
 
-func (b *Block) DecodeBinary(r io.Reader) error {
-	if err := b.Header.DecodeBinary(r); err != nil {
-		return err
-	}
+func (b *Block) HeaderData() []byte {
+	buf := bytes.Buffer{}
+	enc := gob.NewEncoder(&buf)
 
-	for _, tx := range b.Transactions {
-		if err := tx.DecodeBinary(r); err != nil {
-			return err
-		}
-	}
+	enc.Encode(b.Header)
 
-	return nil
+	return buf.Bytes()
 }

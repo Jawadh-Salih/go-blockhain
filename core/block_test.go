@@ -1,16 +1,46 @@
 package core
 
 import (
-	"bytes"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/Jawadh-Salih/go-blockchain/crypto"
 	"github.com/Jawadh-Salih/go-blockchain/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHeaderEncodeDecode(t *testing.T) {
-	h := &Header{
+func TestSignBlock(t *testing.T) {
+	b := randomBlock(0)
+	privKey := crypto.GeneratePrivateKey()
+	fmt.Println(b.Hash(BlockHasher{}))
+
+	assert.Nil(t, b.Sign(privKey))
+	assert.NotNil(t, b.Signature)
+
+	// assert.False(t, h.IsZero())
+}
+
+func TestVerifyBlock(t *testing.T) {
+	b := randomBlock(0)
+	privKey := crypto.GeneratePrivateKey()
+
+	assert.Nil(t, b.Sign(privKey))
+	assert.Nil(t, b.Verify())
+
+	// if the PublicKey is altered.
+	otherPrivKey := crypto.GeneratePrivateKey()
+	b.Validator = otherPrivKey.PublicKey()
+
+	assert.NotNil(t, b.Verify())
+
+	b.Height = 100
+	assert.NotNil(t, b.Verify())
+}
+
+// random block of given height
+func randomBlock(height uint32) *Block {
+	header := &Header{
 		Version:   1,
 		PrevBlock: types.RandomHash(),
 		Timestamp: time.Now().UnixNano(),
@@ -18,48 +48,9 @@ func TestHeaderEncodeDecode(t *testing.T) {
 		Nonce:     9872122,
 	}
 
-	buf := &bytes.Buffer{}
-
-	assert.Nil(t, h.EncodeBinary(buf))
-
-	hDecode := &Header{}
-	assert.Nil(t, hDecode.DecodeBinary(buf))
-	assert.Equal(t, h, hDecode)
-}
-
-func TestBlockEncodeDecode(t *testing.T) {
-	b := &Block{
-		Header: Header{
-			Version:   1,
-			PrevBlock: types.RandomHash(),
-			Timestamp: time.Now().UnixNano(),
-			Height:    10,
-			Nonce:     9872122,
-		},
-		Transactions: nil,
+	tx := Transaction{
+		Data: []byte("Test"),
 	}
 
-	buf := &bytes.Buffer{}
-
-	assert.Nil(t, b.EncodeBinary(buf))
-
-	bDecode := &Block{}
-	assert.Nil(t, bDecode.DecodeBinary(buf))
-	assert.Equal(t, b, bDecode)
-}
-
-func TestBlockHash(t *testing.T) {
-	b := &Block{
-		Header: Header{
-			Version:   1,
-			PrevBlock: types.RandomHash(),
-			Timestamp: time.Now().UnixNano(),
-			Height:    10,
-			Nonce:     9872122,
-		},
-		Transactions: nil,
-	}
-
-	h := b.Hash()
-	assert.False(t, h.IsZero())
+	return NewBlock(header, []Transaction{tx})
 }
