@@ -11,7 +11,7 @@ import (
 )
 
 func TestSignBlock(t *testing.T) {
-	b := randomBlock(0)
+	b := randomBlock(0, types.Hash{})
 	privKey := crypto.GeneratePrivateKey()
 	fmt.Println(b.Hash(BlockHasher{}))
 
@@ -22,7 +22,7 @@ func TestSignBlock(t *testing.T) {
 }
 
 func TestVerifyBlock(t *testing.T) {
-	b := randomBlock(0)
+	b := randomBlock(0, types.Hash{})
 	privKey := crypto.GeneratePrivateKey()
 
 	assert.Nil(t, b.Sign(privKey))
@@ -39,12 +39,12 @@ func TestVerifyBlock(t *testing.T) {
 }
 
 // random block of given height
-func randomBlock(height uint32) *Block {
+func randomBlock(height uint32, prevBlockHash types.Hash) *Block {
 	header := &Header{
 		Version:   1,
-		PrevBlock: types.RandomHash(),
+		PrevBlock: prevBlockHash, // we have to get the previous block's hash to this.
 		Timestamp: time.Now().UnixNano(),
-		Height:    10,
+		Height:    height,
 		Nonce:     9872122,
 	}
 
@@ -55,9 +55,9 @@ func randomBlock(height uint32) *Block {
 	return NewBlock(header, []Transaction{tx})
 }
 
-func randomBlockWithSig(t *testing.T, height uint32) *Block {
+func randomBlockWithSig(t *testing.T, height uint32, prevBlockHash types.Hash) *Block {
 	privKey := crypto.GeneratePrivateKey()
-	b := randomBlock(height)
+	b := randomBlock(height, prevBlockHash)
 
 	assert.Nil(t, b.Sign(privKey))
 
